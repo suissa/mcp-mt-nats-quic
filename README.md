@@ -386,3 +386,82 @@ For detailed instructions on how to test the MCP server using stdio transport, p
 - [Model Context Protocol Documentation](https://modelcontextprotocol.io/introduction)
 - [MCP Specification](https://modelcontextprotocol.io)
 - [Example MCP Servers](https://modelcontextprotocol.io/example-servers)
+
+## Experimental MCP-Scalable-Channel Transport
+
+This fork adds an experimental MCP-over-MOQT/QUIC transport inspired by `draft-jennings-ai-mcp-over-moq-00`.
+
+Existing MCP transports remain supported:
+- `stdio`
+- `sse`
+- `streamable-http`
+
+New experimental transport:
+- `moqt-quic`
+
+Aliases are also accepted for local experimentation:
+- `quic`
+- `quicmq`
+- `mcp-moqt`
+
+> **Warning**
+> This implementation follows an Internet-Draft and must be treated as experimental. Wire format and behavior may change.
+
+The adapter preserves existing MCP JSON-RPC semantics and existing NATS tools. NATS remains the messaging system controlled by MCP tools; QUIC/MOQT is only the MCP transport between an MCP client, CogGate/IntentGate, and this server.
+
+### Local development
+
+```bash
+NATS_NO_AUTHENTICATION=true ./mcp-nats \
+  --transport moqt-quic \
+  --moqt-address 127.0.0.1:9443 \
+  --allow-insecure-quic=true \
+  --require-mtls=false \
+  --require-dpop=false
+```
+
+### Secure development
+
+```bash
+./mcp-nats \
+  --transport moqt-quic \
+  --moqt-address 0.0.0.0:9443 \
+  --moqt-cert ./certs/server.crt \
+  --moqt-key ./certs/server.key \
+  --moqt-client-ca ./certs/ca.crt \
+  --require-mtls=true \
+  --require-dpop=true
+```
+
+Security:
+- mTLS optional and configurable with `--require-mtls`, `--moqt-cert`, `--moqt-key`, and `--moqt-client-ca`.
+- DPoP optional and configurable with `--require-dpop`, `--dpop-jwks-url`, and `--dpop-audience`.
+- If both mTLS and DPoP are disabled, the server logs a strong local-development warning.
+
+This transport is intended for scalable MCP deployments behind CogGate/IntentGate, where agents express business intent and MCP servers execute capabilities behind the gate without exposing NATS directly to external agents.
+
+### Optional configuration shape
+
+```yaml
+mcp_scalable_channel:
+  enabled: true
+  transport: moqt-quic
+  endpoint: "quic://localhost:9443"
+  security:
+    mtls:
+      enabled: true
+      cert: "./certs/server.crt"
+      key: "./certs/server.key"
+      client_ca: "./certs/ca.crt"
+    dpop:
+      enabled: true
+      audience: "mcp-scalable-channel"
+  tracks:
+    control: true
+    tools: true
+    resources: true
+    prompts: true
+    notifications: true
+    elicitation: true
+    logs: true
+```

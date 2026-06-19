@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	mcpnats "github.com/sinadarbouy/mcp-nats"
 	"github.com/sinadarbouy/mcp-nats/internal/logger"
+	"github.com/sinadarbouy/mcp-nats/internal/transport/moqt"
 	"github.com/sinadarbouy/mcp-nats/tools"
 )
 
@@ -29,21 +30,31 @@ const (
 
 // Config holds all configuration for the server
 type Config struct {
-	Transport        string
-	Address          string
-	EndpointPath     string
-	LogLevel         string
-	JSONLogs         bool
-	NoAuthentication bool
-	NATSUser         string
-	NATSPassword     string
-	ReadOnly         bool
+	Transport         string
+	Address           string
+	EndpointPath      string
+	LogLevel          string
+	JSONLogs          bool
+	NoAuthentication  bool
+	NATSUser          string
+	NATSPassword      string
+	ReadOnly          bool
+	MOQTAddress       string
+	MOQTCert          string
+	MOQTKey           string
+	MOQTClientCA      string
+	RequireMTLS       bool
+	RequireDPoP       bool
+	AllowInsecureQUIC bool
+	DPoPJWKSURL       string
+	DPoPAudience      string
 }
 
 // validateConfig ensures all config values are valid
 func validateConfig(cfg *Config) error {
-	if cfg.Transport != "stdio" && cfg.Transport != "sse" && cfg.Transport != "streamable-http" {
-		return fmt.Errorf("invalid transport type: %s (must be 'stdio', 'sse' or 'streamable-http')", cfg.Transport)
+	cfg.Transport = moqt.NormalizeTransport(cfg.Transport)
+	if cfg.Transport != "stdio" && cfg.Transport != "sse" && cfg.Transport != "streamable-http" && cfg.Transport != "moqt-quic" {
+		return fmt.Errorf("invalid transport type: %s (must be 'stdio', 'sse', 'streamable-http' or experimental 'moqt-quic')", cfg.Transport)
 	}
 	if (cfg.Transport == "sse" || cfg.Transport == "streamable-http") && cfg.Address == "" {
 		return fmt.Errorf("address cannot be empty when using %s transport", cfg.Transport)
@@ -239,6 +250,14 @@ func run(ctx context.Context, cfg *Config) error {
 		)
 		return runHTTPServer(ctx, srv, cfg.Address, "sse")
 
+	case "moqt-quic":
+		srv, err := moqt.NewServer(s, moqt.Config{Address: cfg.MOQTAddress, CertFile: cfg.MOQTCert, KeyFile: cfg.MOQTKey, ClientCAFile: cfg.MOQTClientCA, RequireMTLS: cfg.RequireMTLS, RequireDPoP: cfg.RequireDPoP, AllowInsecureQUIC: cfg.AllowInsecureQUIC, DPoPJWKSURL: cfg.DPoPJWKSURL, DPoPAudience: cfg.DPoPAudience})
+		if err != nil {
+			return err
+		}
+		logger.Info("Starting NATS MCP server using experimental MOQT/QUIC transport", "address", cfg.MOQTAddress)
+		return srv.Listen(ctx)
+
 	case "streamable-http":
 		httpSrv := &http.Server{Addr: cfg.Address}
 		srv := server.NewStreamableHTTPServer(s,
@@ -267,7 +286,7 @@ func main() {
 	cfg := &Config{}
 
 	// Parse command line flags
-	flag.StringVar(&cfg.Transport, "transport", "streamable-http", "Transport type (stdio, sse or streamable-http)")
+	flag.StringVar(&cfg.Transport, "transport", "streamable-http", "Transport type (stdio, sse, streamable-http or experimental moqt-quic)")
 	flag.StringVar(&cfg.Address, "address", "0.0.0.0:8000", "Address for HTTP server to listen on")
 	flag.StringVar(&cfg.Address, "sse-address", "0.0.0.0:8000", "Deprecated: use --address instead")
 	flag.StringVar(&cfg.EndpointPath, "endpoint-path", "/mcp", "Endpoint path for streamable-http server")
@@ -277,6 +296,15 @@ func main() {
 	flag.StringVar(&cfg.NATSUser, "user", "", "NATS username or token (can also be set via NATS_USER env var)")
 	flag.StringVar(&cfg.NATSPassword, "password", "", "NATS password (can also be set via NATS_PASSWORD env var)")
 	flag.BoolVar(&cfg.ReadOnly, "read-only", envReadOnly(), "Omit mutating MCP tools; default from MCP_NATS_READ_ONLY (true/1/yes)")
+	flag.StringVar(&cfg.MOQTAddress, "moqt-address", "0.0.0.0:9443", "Address for experimental MOQT/QUIC transport")
+	flag.StringVar(&cfg.MOQTCert, "moqt-cert", "", "Server certificate for experimental MOQT/QUIC transport")
+	flag.StringVar(&cfg.MOQTKey, "moqt-key", "", "Server private key for experimental MOQT/QUIC transport")
+	flag.StringVar(&cfg.MOQTClientCA, "moqt-client-ca", "", "Client CA certificate for MOQT mTLS")
+	flag.BoolVar(&cfg.RequireMTLS, "require-mtls", true, "Require and verify client certificates for MOQT mTLS")
+	flag.BoolVar(&cfg.RequireDPoP, "require-dpop", true, "Require DPoP proof metadata for MOQT sessions")
+	flag.BoolVar(&cfg.AllowInsecureQUIC, "allow-insecure-quic", false, "Allow local insecure/self-signed MOQT/QUIC development mode")
+	flag.StringVar(&cfg.DPoPJWKSURL, "dpop-jwks-url", "", "JWKS URL for DPoP verification (reserved for strict verifier)")
+	flag.StringVar(&cfg.DPoPAudience, "dpop-audience", moqt.DefaultAudience, "Expected DPoP audience")
 	flag.Parse()
 
 	// Validate configuration
