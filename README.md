@@ -409,6 +409,8 @@ Aliases are also accepted for local experimentation:
 
 The adapter preserves existing MCP JSON-RPC semantics and existing NATS tools. NATS remains the messaging system controlled by MCP tools; QUIC/MOQT is only the MCP transport between an MCP client, CogGate/IntentGate, and this server.
 
+Control channels use `client-to-server` and `server-to-client` as separate logical tracks under `(mcp, <session-id>, control)`, but both channels use the same event-name vocabulary and may carry the same JSON-RPC payload. Which channel is open, subscribed, or used for a duplicated payload is determined by the client.
+
 ### Local development
 
 ```bash
