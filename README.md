@@ -399,6 +399,16 @@ Existing MCP transports remain supported:
 New experimental transport:
 - `moqt-quic`
 
+Experimental scalable-channel carriers are declared through `--scalable-channel-backends` and currently have backend-neutral adapter support for:
+- `nats`
+- `quic`
+- `kafka`
+- `redpanda`
+- `rabbitmq`
+- `bullmq`
+- `redis-streams`
+- `grpc`
+
 Aliases are also accepted for local experimentation:
 - `quic`
 - `quicmq`
@@ -419,7 +429,8 @@ NATS_NO_AUTHENTICATION=true ./mcp-nats \
   --moqt-address 127.0.0.1:9443 \
   --allow-insecure-quic=true \
   --require-mtls=false \
-  --require-dpop=false
+  --require-dpop=false \
+  --scalable-channel-backends quic
 ```
 
 ### Secure development
@@ -438,6 +449,7 @@ NATS_NO_AUTHENTICATION=true ./mcp-nats \
 Security:
 - mTLS optional and configurable with `--require-mtls`, `--moqt-cert`, `--moqt-key`, and `--moqt-client-ca`.
 - DPoP optional and configurable with `--require-dpop`, `--dpop-jwks-url`, and `--dpop-audience`.
+- Scalable-channel carriers are selected with `--scalable-channel-backends nats,quic,kafka,redpanda,rabbitmq,bullmq,redis-streams,grpc`; v0 keeps MCP payload semantics identical across carriers and provides a backend-neutral adapter interface for concrete implementations.
 - If both mTLS and DPoP are disabled, the server logs a strong local-development warning.
 
 This transport is intended for scalable MCP deployments behind CogGate/IntentGate, where agents express business intent and MCP servers execute capabilities behind the gate without exposing NATS directly to external agents.
@@ -458,6 +470,15 @@ mcp_scalable_channel:
     dpop:
       enabled: true
       audience: "mcp-scalable-channel"
+  backends:
+    - nats
+    - quic
+    - kafka
+    - redpanda
+    - rabbitmq
+    - bullmq
+    - redis-streams
+    - grpc
   tracks:
     control: true
     tools: true

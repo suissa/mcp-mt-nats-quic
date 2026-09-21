@@ -6,4 +6,6 @@ MCP JSON-RPC semantics remain unchanged. The adapter maps MCP control and tool m
 
 Control uses two concurrently-open logical channels, `client-to-server` and `server-to-client`, under the same `(mcp, <session-id>, control)` namespace. Both channels share the same event-name vocabulary (`initialize`, `initialized`, `ping`, `pong`, `tools.call`, `tools.result`, etc.) and either channel can carry the same JSON-RPC payload when a client chooses to publish or subscribe that way.
 
+The backend-neutral channel registry accepts `nats`, `quic`, `kafka`, `redpanda`, `rabbitmq`, `bullmq`, `redis-streams`, and `grpc`. Concrete adapters must preserve MCP JSON-RPC payloads and event names across these carriers; Redpanda is treated as a Kafka-compatible carrier, while BullMQ and Redis Streams are modeled as Redis-backed carriers.
+
 Current v0 status: the public adapter and security interfaces are isolated for replacement by a real MOQT library; the listener uses a TCP/TLS compatibility shim so local development and JSON-RPC behavior can be exercised while MOQT support matures.

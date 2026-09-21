@@ -30,24 +30,26 @@ const (
 
 // Config holds all configuration for the server
 type Config struct {
-	Transport         string
-	Address           string
-	EndpointPath      string
-	LogLevel          string
-	JSONLogs          bool
-	NoAuthentication  bool
-	NATSUser          string
-	NATSPassword      string
-	ReadOnly          bool
-	MOQTAddress       string
-	MOQTCert          string
-	MOQTKey           string
-	MOQTClientCA      string
-	RequireMTLS       bool
-	RequireDPoP       bool
-	AllowInsecureQUIC bool
-	DPoPJWKSURL       string
-	DPoPAudience      string
+	Transport          string
+	Address            string
+	EndpointPath       string
+	LogLevel           string
+	JSONLogs           bool
+	NoAuthentication   bool
+	NATSUser           string
+	NATSPassword       string
+	ReadOnly           bool
+	MOQTAddress        string
+	MOQTCert           string
+	MOQTKey            string
+	MOQTClientCA       string
+	RequireMTLS        bool
+	RequireDPoP        bool
+	AllowInsecureQUIC  bool
+	DPoPJWKSURL        string
+	DPoPAudience       string
+	ChannelBackendsRaw string
+	ChannelBackends    []moqt.ChannelBackend
 }
 
 // validateConfig ensures all config values are valid
@@ -58,6 +60,13 @@ func validateConfig(cfg *Config) error {
 	}
 	if (cfg.Transport == "sse" || cfg.Transport == "streamable-http") && cfg.Address == "" {
 		return fmt.Errorf("address cannot be empty when using %s transport", cfg.Transport)
+	}
+	if cfg.Transport == "moqt-quic" {
+		backends, err := moqt.ParseChannelBackends(cfg.ChannelBackendsRaw)
+		if err != nil {
+			return err
+		}
+		cfg.ChannelBackends = backends
 	}
 	if cfg.Transport == "streamable-http" {
 		if cfg.EndpointPath == "" {
@@ -251,7 +260,7 @@ func run(ctx context.Context, cfg *Config) error {
 		return runHTTPServer(ctx, srv, cfg.Address, "sse")
 
 	case "moqt-quic":
-		srv, err := moqt.NewServer(s, moqt.Config{Address: cfg.MOQTAddress, CertFile: cfg.MOQTCert, KeyFile: cfg.MOQTKey, ClientCAFile: cfg.MOQTClientCA, RequireMTLS: cfg.RequireMTLS, RequireDPoP: cfg.RequireDPoP, AllowInsecureQUIC: cfg.AllowInsecureQUIC, DPoPJWKSURL: cfg.DPoPJWKSURL, DPoPAudience: cfg.DPoPAudience})
+		srv, err := moqt.NewServer(s, moqt.Config{Address: cfg.MOQTAddress, CertFile: cfg.MOQTCert, KeyFile: cfg.MOQTKey, ClientCAFile: cfg.MOQTClientCA, RequireMTLS: cfg.RequireMTLS, RequireDPoP: cfg.RequireDPoP, AllowInsecureQUIC: cfg.AllowInsecureQUIC, DPoPJWKSURL: cfg.DPoPJWKSURL, DPoPAudience: cfg.DPoPAudience, ChannelBackends: cfg.ChannelBackends})
 		if err != nil {
 			return err
 		}
@@ -305,6 +314,7 @@ func main() {
 	flag.BoolVar(&cfg.AllowInsecureQUIC, "allow-insecure-quic", false, "Allow local insecure/self-signed MOQT/QUIC development mode")
 	flag.StringVar(&cfg.DPoPJWKSURL, "dpop-jwks-url", "", "JWKS URL for DPoP verification (reserved for strict verifier)")
 	flag.StringVar(&cfg.DPoPAudience, "dpop-audience", moqt.DefaultAudience, "Expected DPoP audience")
+	flag.StringVar(&cfg.ChannelBackendsRaw, "scalable-channel-backends", "quic", "Comma-separated experimental scalable channel backends (nats,quic,kafka,redpanda,rabbitmq,bullmq,redis-streams,grpc)")
 	flag.Parse()
 
 	// Validate configuration

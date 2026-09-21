@@ -20,6 +20,7 @@ import (
 type Config struct {
 	Address, CertFile, KeyFile, ClientCAFile, DPoPJWKSURL, DPoPAudience string
 	RequireMTLS, RequireDPoP, AllowInsecureQUIC                         bool
+	ChannelBackends                                                     []ChannelBackend
 }
 
 type Server struct {
@@ -27,6 +28,7 @@ type Server struct {
 	cfg       Config
 	tlsConfig *tls.Config
 	verifier  security.DPoPVerifier
+	registry  Registry
 	listener  net.Listener
 	mu        sync.Mutex
 	closed    bool
@@ -39,7 +41,7 @@ func NewServer(core *server.MCPServer, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ErrQUICConnectionFailed, err)
 	}
-	return &Server{core: core, cfg: cfg, tlsConfig: tlsCfg, verifier: policy.DPoPVerifier()}, nil
+	return &Server{core: core, cfg: cfg, tlsConfig: tlsCfg, verifier: policy.DPoPVerifier(), registry: NewRegistry(cfg.ChannelBackends)}, nil
 }
 
 func (s *Server) Listen(ctx context.Context) error {
@@ -52,7 +54,7 @@ func (s *Server) Listen(ctx context.Context) error {
 		return &TransportError{Category: ErrQUICConnectionFailed, Message: "listen failed", Err: err}
 	}
 	s.listener = ln
-	slog.Warn("Starting experimental MCP-Scalable-Channel MOQT/QUIC transport (TCP/TLS compatibility shim; wire format may change)", "address", addr)
+	slog.Warn("Starting experimental MCP-Scalable-Channel MOQT/QUIC transport (TCP/TLS compatibility shim; wire format may change)", "address", addr, "channelBackends", s.registry.Backends())
 	errCh := make(chan error, 1)
 	go func() {
 		for {
